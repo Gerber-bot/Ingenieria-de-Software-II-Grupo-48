@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <h4 class="mb-0 text-secondary fw-bold"><i class="fas fa-users me-2"></i>Gestión de Usuarios</h4>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-info fw-bold" onclick="abrirModalRoles()"><i class="fas fa-user-tag me-1"></i> Gestión de Roles</button>
+            <button class="btn btn-success fw-bold" onclick="abrirModalUsuario()"><i class="fas fa-user-plus me-1"></i> Nuevo Usuario</button>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold">Listado de Usuarios</h6>
+        <div class="input-group" style="width: 300px;">
+            <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" class="form-control border-start-0 ps-0" id="buscadorUsuarios" placeholder="Buscar por nombre, DNI, rol..." onkeyup="filtrarUsuarios()">
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 65vh; overflow-y: auto;">
+            <table class="table table-hover align-middle mb-0" id="tablaUsuarios">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Apellido</th>
+                        <th>DNI</th>
+                        <th>Usuario (Email)</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                    <tbody>
+                    {% for u in usuarios %}
+                    <tr class="usuario-row">
+                        <td class="fw-bold">{{ u.nombre }}</td>
+                        <td class="fw-bold">{{ u.apellido }}</td>
+                        <td>{{ u.dni }}</td>
+                        <td>{{ u.email }}</td>
+                        <td><span class="badge bg-secondary">{{ u.rol }}</span></td>
+                        <td>
+                            <!-- LÓGICA DIRECTA EN HTML -->
+                            <span class="badge {% if u.is_activo %}bg-success{% else %}bg-danger{% endif %} cursor-pointer" 
+                                  data-id="{{ u.id_usuario }}"
+                                  data-nombre="{{ u.nombre }}"
+                                  data-apellido="{{ u.apellido }}"
+                                  data-activo="{{ 'true' if u.is_activo else 'false' }}"
+                                  onclick="toggleEstado(this.dataset.id, this.dataset.nombre, this.dataset.apellido, this.dataset.activo === 'true')"
+                                  title="Click para cambiar estado">
+                                {{ 'Activo' if u.is_activo else 'Inactivo' }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary" 
+                                    title="Modificar" 
+                                    data-usuario='{{ u | tojson | forceescape }}' 
+                                    onclick="editarUsuario(JSON.parse(this.dataset.usuario))">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" 
+                                    title="Eliminar Permanentemente" 
+                                    onclick="eliminarUsuario('{{ u.id_usuario }}', '{{ u.nombre }}', '{{ u.apellido }}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================== -->
+<!-- MODAL AGREGAR/EDITAR USUARIO                   -->
+<!-- ============================================== -->
+<div class="modal fade" id="modalUsuario" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header text-white" style="background-color: #2980b9;">
+                <h5 class="modal-title fw-bold" id="modalUsuarioLabel">Agregar Usuario</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formUsuario">
+                    <input type="hidden" id="u_id_usuario">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Nombre:</label>
+                            <input type="text" class="form-control bg-light" id="u_nombre" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Apellido:</label>
+                            <input type="text" class="form-control bg-light" id="u_apellido" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">DNI:</label>
+                            <input type="text" class="form-control bg-light" id="u_dni" required pattern="\d{8,10}" title="El DNI debe tener entre 8 y 10 números">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Email (Usuario):</label>
+                            <input type="email" class="form-control bg-light" id="u_usuario" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Rol:</label>
+                            <select class="form-select bg-light" id="u_rol" required>
+                                {% for r in roles %}
+                                <option value="{{ r.id_rol }}">{{ r.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Sección de Contraseña -->
+                        <div class="col-12 text-center" id="divBtnCambiarContraseña" style="display: none;">
+                            <button type="button" class="btn btn-sm btn-info fw-bold text-white w-100" id="btnCambiarPwd" onclick="toggleCambioContraseña()">Cambiar Contraseña</button>
+                        </div>
+                        
+                        <div class="col-12" id="divContraseña">
+                            <label class="form-label fw-bold">Contraseña:</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control bg-light" id="u_password" required minlength="6">
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility()"><i class="fas fa-eye" id="iconEye"></i></button>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light justify-content-center border-0 pb-4">
+                <button type="button" class="btn btn-primary fw-bold px-4" onclick="guardarUsuarioFinal()">Guardar</button>
+                <button type="button" class="btn btn-secondary fw-bold px-4" data-bs-dismiss="modal">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================== -->
+<!-- MODAL GESTIÓN DE ROLES                         -->
+<!-- ============================================== -->
+<div class="modal fade" id="modalRoles" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header text-white" style="background-color: #2980b9;">
+                <h5 class="modal-title fw-bold">Gestión de Roles</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="formRol" onsubmit="guardarRol(event)" class="mb-4">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="nombreRol" placeholder="Nombre del nuevo rol" required>
+                        <button class="btn btn-success fw-bold" type="submit">Agregar</button>
+                    </div>
+                </form>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr><th>Rol</th><th class="text-center">Acciones</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for r in roles %}
+                            <tr>
+                                <td class="fw-bold text-secondary">{{ r.nombre }}</td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-danger" title="Eliminar" onclick="eliminarRol('{{ r.id_rol }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .cursor-pointer { cursor: pointer; }
+    .cursor-pointer:hover { opacity: 0.8; }
+</style>
+
+<script>
+    // --- BÚSQUEDA ---
+    function filtrarUsuarios() {
+        const input = document.getElementById("buscadorUsuarios").value.toLowerCase();
+        const filas = document.querySelectorAll(".usuario-row");
+        
+        filas.forEach(fila => {
+            const texto = fila.innerText.toLowerCase();
+            fila.style.display = texto.includes(input) ? "" : "none";
+        });
+    }
+
+    // --- LÓGICA MODAL USUARIO ---
+    let quiereCambiarContraseña = false;
+
+    function abrirModalUsuario() {
+        document.getElementById('formUsuario').reset();
+        document.getElementById('u_id_usuario').value = '';
+        document.getElementById('modalUsuarioLabel').innerText = 'Agregar Nuevo Usuario';
+        
+        quiereCambiarContraseña = false;
+
+        document.getElementById('divContraseña').style.display = 'block';
+        document.getElementById('u_password').required = true;
+        document.getElementById('u_password').disabled = false;
+        document.getElementById('divBtnCambiarContraseña').style.display = 'none';
+
+        new bootstrap.Modal(document.getElementById('modalUsuario')).show();
+    }
+
+    function editarUsuario(u) {
+        document.getElementById('u_id_usuario').value = u.id_usuario;
+        document.getElementById('u_nombre').value = u.nombre;
+        document.getElementById('u_apellido').value = u.apellido;
+        document.getElementById('u_dni').value = u.dni;
+        document.getElementById('u_usuario').value = u.usuario;
+        
+        document.getElementById('u_usuario').value = u.email;
+        // Seleccionar Rol por texto
+        let selectRol = document.getElementById('u_rol');
+        for (let i = 0; i < selectRol.options.length; i++) {
+            if (selectRol.options[i].text === u.rol) {
+                selectRol.selectedIndex = i;
+                break;
+            }
+        }
+
+        document.getElementById('modalUsuarioLabel').innerText = 'Modificar Usuario';
+        
+        quiereCambiarContraseña = false;
+
+        document.getElementById('divContraseña').style.display = 'none';
+        document.getElementById('u_password').required = false;
+        document.getElementById('u_password').value = '';
+        
+        const btnCambiar = document.getElementById('btnCambiarPwd');
+        btnCambiar.innerText = 'Cambiar Contraseña';
+        btnCambiar.classList.remove('btn-danger');
+        btnCambiar.classList.add('btn-info');
+        document.getElementById('divBtnCambiarContraseña').style.display = 'block';
+
+        new bootstrap.Modal(document.getElementById('modalUsuario')).show();
+    }
+
+    function toggleCambioContraseña() {
+        quiereCambiarContraseña = !quiereCambiarContraseña;
+        const btn = document.getElementById('btnCambiarPwd');
+        const divPwd = document.getElementById('divContraseña');
+        const inputPwd = document.getElementById('u_password');
+
+        if (quiereCambiarContraseña) {
+            btn.innerText = 'Cancelar Cambio';
+            btn.classList.remove('btn-info');
+            btn.classList.add('btn-danger');
+            divPwd.style.display = 'block';
+            inputPwd.disabled = false;
+            inputPwd.required = true;
+            inputPwd.focus();
+        } else {
+            btn.innerText = 'Cambiar Contraseña';
+            btn.classList.remove('btn-danger');
+            btn.classList.add('btn-info');
+            divPwd.style.display = 'none';
+            inputPwd.required = false;
+            inputPwd.value = '';
+        }
+    }
+
+    function togglePasswordVisibility() {
+        const input = document.getElementById('u_password');
+        const icon = document.getElementById('iconEye');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    }
+
+    function guardarUsuarioFinal() {
+        const form = document.getElementById('formUsuario');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        const payload = {
+            id_usuario: document.getElementById('u_id_usuario').value,
+            nombre: document.getElementById('u_nombre').value,
+            apellido: document.getElementById('u_apellido').value,
+            dni: document.getElementById('u_dni').value,
+            usuario: document.getElementById('u_usuario').value,
+            id_rol: document.getElementById('u_rol').value,
+            password: document.getElementById('u_password').value,
+            cambiar_password: quiereCambiarContraseña
+        };
+
+        fetch("{{ url_for('admin.guardar_usuario') }}", {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => { 
+            if(data.success) {
+                location.reload(); 
+            } else {
+                alert(data.message); 
+            }
+        });
+    }
+
+    // --- ACCIONES EN GRILLA ---
+    function eliminarUsuario(id, nombre, apellido) {
+        if(confirm(`¿Seguro que desea ELIMINAR PERMANENTEMENTE al usuario ${nombre} ${apellido}?\n\nEsta acción no se puede deshacer.`)) {
+            fetch(`{{ url_for('admin.eliminar_usuario', id_usuario=0) }}`.replace('0', id), { method: 'POST' })
+            .then(res => res.json())
+            .then(data => { 
+                alert(data.message);
+                if(data.success) location.reload(); 
+            });
+        }
+    }
+
+  function toggleEstado(id, nombre, apellido, estadoActual) {
+        const nuevoEstadoTexto = estadoActual ? "DESACTIVAR" : "ACTIVAR";
+        if(confirm(`¿Está seguro que desea ${nuevoEstadoTexto} al usuario ${nombre} ${apellido}?`)) {
+            fetch(`{{ url_for('admin.toggle_estado', id_usuario=0) }}`.replace('0', id), { method: 'POST' })
+            .then(res => res.json())
+            .then(data => { 
+                if(data.success) {
+                    location.reload(); 
+                } else {
+                    alert("Error: " + data.message); 
+                }
+            })
+            .catch(error => {
+                console.error("Error en la petición:", error);
+                alert("Ocurrió un error al comunicarse con el servidor. Revisa la consola.");
+            });
+        }
+    }
+
+    // --- ROLES ---
+    function abrirModalRoles() {
+        new bootstrap.Modal(document.getElementById('modalRoles')).show();
+    }
+
+    function guardarRol(e) {
+        e.preventDefault();
+        fetch("{{ url_for('admin.guardar_rol') }}", {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nombre: document.getElementById('nombreRol').value })
+        }).then(res => res.json()).then(data => { 
+            if(data.success) location.reload(); 
+            else alert(data.message); 
+        });
+    }
+
+    function eliminarRol(id) {
+        if(confirm("¿Eliminar este rol?")) {
+            fetch(`{{ url_for('admin.eliminar_rol', id_rol=0) }}`.replace('0', id), { method: 'POST' })
+            .then(res => res.json()).then(data => { 
+                if(data.success) location.reload(); 
+                else alert(data.message); 
+            });
+        }
+    }
+
+</script>
+{% endblock %}

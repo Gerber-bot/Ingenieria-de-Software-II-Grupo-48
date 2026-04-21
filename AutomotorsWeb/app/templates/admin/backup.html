@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Copias de Seguridad{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card shadow border-0">
+            <div class="card-header bg-dark text-white py-3">
+                <h4 class="mb-0 fw-bold"><i class="fas fa-database me-2"></i>Centro de Seguridad de Datos</h4>
+            </div>
+            <div class="card-body text-center py-5">
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show text-start" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <i class="fas fa-server fa-5x text-secondary mb-4"></i>
+                <h3 class="fw-bold text-dark">Respaldo de la Base de Datos</h3>
+                <p class="text-muted fs-5 mb-4">
+                    Al generar una copia de seguridad, se creará un archivo <strong>.bak</strong> con toda la información actual de vehículos, clientes, ventas y usuarios.<br>
+                    El archivo se guardará automáticamente en el servidor en la ruta: <code class="bg-light px-2 py-1 rounded">C:\Backups_Automotors\</code>
+                </p>
+
+                <form method="POST" action="{{ url_for('admin.backup') }}" onsubmit="document.getElementById('btnGuardar').disabled=true; document.getElementById('spinner').classList.remove('d-none');">
+                    <button type="submit" id="btnGuardar" class="btn btn-success btn-lg fw-bold px-5">
+                        <span id="spinner" class="spinner-border spinner-border-sm d-none me-2" role="status" aria-hidden="true"></span>
+                        <i class="fas fa-download me-2"></i> Generar Backup Ahora
+                    </button>
+                </form>
+
+            </div>
+            <div class="card-footer bg-light text-muted text-center py-3">
+                <small><i class="fas fa-info-circle me-1"></i> Asegúrese de que el servicio de SQL Server tenga permisos de escritura en el disco C:\</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

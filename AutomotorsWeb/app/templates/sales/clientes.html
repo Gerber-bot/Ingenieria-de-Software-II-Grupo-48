@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+
+{% block title %}Directorio de Clientes{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- PANEL IZQUIERDO: LISTADO DE CLIENTES -->
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0 text-secondary fw-bold"><i class="fas fa-address-book me-2"></i>Cartera de Clientes</h5>
+                <button type="button" class="btn btn-success fw-bold btn-sm" onclick="abrirModalCliente()">
+                    <i class="fas fa-user-plus me-1"></i> Nuevo Cliente
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="p-3 border-bottom bg-light">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" class="form-control border-start-0 ps-0" id="buscadorClientes" placeholder="Buscar por DNI, apellido o nombre..." onkeyup="filtrarClientes()">
+                    </div>
+                </div>
+                
+                <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+                    <table class="table table-hover align-middle mb-0" id="tablaClientes">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>DNI</th>
+                                <th>Cliente</th>
+                                <th>Teléfono</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in clientes %}
+                            <tr class="cliente-row cursor-pointer" onclick="cargarDatosCliente('{{ c.id_cliente }}', '{{ c.nombre }}', '{{ c.apellido }}')">
+                                <td class="fw-bold text-secondary dni-celda">{{ c.dni }}</td>
+                                <td class="fw-bold nombre-celda">{{ c.apellido }}, {{ c.nombre }}</td>
+                                <td>{{ c.telefono }}</td>
+                                <td class="text-center" onclick="event.stopPropagation()">
+                                    <button class="btn btn-sm btn-outline-primary" title="Editar" onclick="abrirModalCliente('{{ c.id_cliente }}', '{{ c.dni }}', '{{ c.nombre }}', '{{ c.apellido }}', '{{ c.telefono }}', '{{ c.email }}', '{{ c.direccion }}')"><i class="fas fa-edit"></i></button>
+                                    <button class="btn btn-sm btn-outline-danger" title="Eliminar" onclick="eliminarCliente('{{ c.id_cliente }}', '{{ c.nombre }} {{ c.apellido }}')"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center py-4 text-muted">No hay clientes registrados.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL DERECHO: DETALLE DEL CLIENTE SELECCIONADO (Cuotas y Compras) -->
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100" id="panelDetalleCliente" style="display: none;">
+            <div class="card-header bg-steel text-white py-3" style="background-color: #2c3e50;">
+                <h5 class="mb-0 fw-bold" id="lblNombreClienteSeleccionado"><i class="fas fa-user-circle me-2"></i>Seleccione un cliente</h5>
+            </div>
+            
+            <div class="card-body p-0">
+                <!-- Pestañas para cambiar entre Cuotas y Compras -->
+                <ul class="nav nav-tabs nav-fill bg-light border-bottom-0" id="clienteTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold text-danger border-0 border-bottom border-danger border-3" id="cuotas-tab" data-bs-toggle="tab" data-bs-target="#cuotas" type="button" role="tab">
+                            <i class="fas fa-exclamation-circle me-1"></i> Cuotas Pendientes (<span id="badgeCuotas">0</span>)
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold text-secondary border-0" id="compras-tab" data-bs-toggle="tab" data-bs-target="#compras" type="button" role="tab">
+                            <i class="fas fa-shopping-bag me-1"></i> Historial Compras
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content p-3" id="clienteTabsContent" style="max-height: 50vh; overflow-y: auto;">
+                    <!-- TAB CUOTAS PENDIENTES -->
+                    <div class="tab-pane fade show active" id="cuotas" role="tabpanel">
+                        <div id="contenedorCuotas">
+                            <!-- Se llena por JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- TAB HISTORIAL DE COMPRAS -->
+                    <div class="tab-pane fade" id="compras" role="tabpanel">
+                        <div id="contenedorCompras">
+                            <!-- Se llena por JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm border-0 h-100 text-muted" id="panelVacio" style="display: flex; justify-content: center; align-items: center;">
+            <div class="text-center">
+                <i class="fas fa-hand-pointer fa-4x mb-3 text-light"></i>
+                <h5>Seleccione un cliente de la lista</h5>
+                <p class="mb-0">Para ver sus cuotas y compras</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: NUEVO / EDITAR CLIENTE (FrmClienteDetalle) -->
+<div class="modal fade" id="modalCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold text-secondary" id="modalClienteLabel"><i class="fas fa-user-edit me-2"></i>Gestión de Cliente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formCliente" onsubmit="guardarCliente(event)">
+                <div class="modal-body">
+                    <input type="hidden" id="idCliente" name="id_cliente">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Nombre</label>
+                            <input type="text" class="form-control" id="nombreCliente" name="nombre" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Apellido</label>
+                            <input type="text" class="form-control" id="apellidoCliente" name="apellido" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold">DNI</label>
+                            <input type="text" class="form-control" id="dniCliente" name="dni" required>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-bold">Teléfono</label>
+                            <input type="text" class="form-control" id="telefonoCliente" name="telefono">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Email</label>
+                            <input type="email" class="form-control" id="emailCliente" name="email">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Dirección</label>
+                            <input type="text" class="form-control" id="direccionCliente" name="direccion">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success fw-bold"><i class="fas fa-save me-1"></i> Guardar Cliente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Estilos para la tabla clickeable -->
+<style>
+    .cursor-pointer { cursor: pointer; transition: background-color 0.2s; }
+    .cursor-pointer:hover { background-color: #f8f9fa !important; }
+    .fila-seleccionada { background-color: #e9ecef !important; border-left: 4px solid #3498db; }
+</style>
+
+<script>
+    let clienteActualId = null;
+
+    // --- BÚSQUEDA RÁPIDA DE CLIENTES ---
+    function filtrarClientes() {
+        const input = document.getElementById("buscadorClientes").value.toLowerCase();
+        const filas = document.querySelectorAll(".cliente-row");
+        
+        filas.forEach(fila => {
+            const texto = fila.innerText.toLowerCase();
+            fila.style.display = texto.includes(input) ? "" : "none";
+        });
+    }
+
+    // --- ABM CLIENTES (FrmClienteDetalle) ---
+    // ¡Añadido el parámetro de dirección!
+    function abrirModalCliente(id='', dni='', nombre='', apellido='', tel='', email='', dir='') {
+        document.getElementById('idCliente').value = id;
+        document.getElementById('dniCliente').value = dni;
+        document.getElementById('nombreCliente').value = nombre;
+        document.getElementById('apellidoCliente').value = apellido;
+        document.getElementById('telefonoCliente').value = tel;
+        document.getElementById('emailCliente').value = email;
+        document.getElementById('direccionCliente').value = dir;
+        
+        document.getElementById('modalClienteLabel').innerHTML = id ? '<i class="fas fa-user-edit me-2"></i>Editar Cliente' : '<i class="fas fa-user-plus me-2"></i>Nuevo Cliente';
+        new bootstrap.Modal(document.getElementById('modalCliente')).show();
+    }
+
+    function guardarCliente(e) {
+        e.preventDefault();
+        const formData = new FormData(document.getElementById('formCliente'));
+        
+        fetch("{{ url_for('sales.guardar_cliente') }}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                location.reload(); // Recargamos para ver los cambios
+            } else {
+                alert(data.message);
+            }
+        });
+    }
+
+    function eliminarCliente(id, nombre) {
+        if(confirm(`¿Está seguro de eliminar al cliente ${nombre}?`)) {
+            fetch(`{{ url_for('sales.eliminar_cliente', id_cliente=0) }}`.replace('0', id), { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
+                if(data.success) location.reload();
+            });
+        }
+    }
+
+    // --- PANEL DE CONTROL DEL CLIENTE (Cuotas y Compras) ---
+    function cargarDatosCliente(id, nombre, apellido) {
+        clienteActualId = id;
+        
+        // Efecto visual de selección en la tabla
+        document.querySelectorAll('.cliente-row').forEach(r => r.classList.remove('fila-seleccionada'));
+        event.currentTarget.classList.add('fila-seleccionada');
+
+        // Mostrar panel ocultando forzosamente el vacío
+        document.getElementById('panelVacio').style.display = 'none';
+        document.getElementById('panelDetalleCliente').style.display = 'block';
+        document.getElementById('lblNombreClienteSeleccionado').innerHTML = `<i class="fas fa-user me-2"></i>${nombre} ${apellido}`;
+
+        // Obtener datos del servidor
+        fetch(`{{ url_for('sales.get_datos_cliente', id_cliente=0) }}`.replace('0', id))
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                renderizarCuotas(data.cuotas);
+                renderizarCompras(data.compras);
+            }
+        }).catch(err => console.error("Error cargando datos:", err));
+    }
+
+    function renderizarCuotas(cuotas) {
+        const div = document.getElementById('contenedorCuotas');
+        document.getElementById('badgeCuotas').innerText = cuotas.length;
+        
+        if (cuotas.length === 0) {
+            div.innerHTML = `<div class="alert alert-success text-center border-0 bg-light"><i class="fas fa-check-circle fa-2x mb-2 text-success"></i><br>El cliente está al día. No posee cuotas pendientes.</div>`;
+            return;
+        }
+
+        let html = `<div class="list-group list-group-flush">`;
+        cuotas.forEach(c => {
+            // Convertimos el valor a número por si viene como texto desde Python
+            let total = parseFloat(c.total_cuota) || 0;
+            html += `
+                <div class="list-group-item d-flex justify-content-between align-items-center py-3">
+                    <div>
+                        <h6 class="mb-1 fw-bold">Cuota #${c.numero_cuota} <small class="text-muted">(Venta #${c.id_venta})</small></h6>
+                        <span class="badge bg-warning text-dark"><i class="fas fa-calendar-alt me-1"></i> Vence: ${c.vencimiento}</span>
+                    </div>
+                    <div class="text-end">
+                        <h5 class="text-danger fw-bold mb-1">$${total.toFixed(2)}</h5>
+                        <button class="btn btn-sm btn-primary fw-bold" onclick="pagarCuota(${c.id_plan_cuota}, ${c.numero_cuota}, ${total})">
+                            <i class="fas fa-money-bill-wave me-1"></i> Pagar
+                        </button>
+                    </div>
+                </div>`;
+        });
+        div.innerHTML = html + `</div>`;
+    }
+
+    function renderizarCompras(compras) {
+        const div = document.getElementById('contenedorCompras');
+        
+        if (compras.length === 0) {
+            div.innerHTML = `<div class="text-center py-4 text-muted"><i class="fas fa-shopping-basket fa-3x mb-2"></i><br>El cliente aún no tiene compras registradas.</div>`;
+            return;
+        }
+
+        let html = `<div class="list-group list-group-flush">`;
+        compras.forEach(c => {
+            // Convertimos a número antes del toFixed
+            let total = parseFloat(c.total) || 0;
+            html += `
+                <div class="list-group-item py-3">
+                    <div class="d-flex w-100 justify-content-between mb-1">
+                        <h6 class="mb-0 fw-bold">Operación #${c.id_venta}</h6>
+                        <small class="text-muted">${c.fecha}</small>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-end mt-2">
+                        <div>
+                            <span class="badge ${c.forma_pago === 'Contado' ? 'bg-success' : 'bg-info'} mb-1">${c.forma_pago}</span><br>
+                            <small class="text-muted"><i class="fas fa-user-tie me-1"></i> Vendió: ${c.vendedor}</small>
+                        </div>
+                        <h5 class="text-success fw-bold mb-0">$${total.toFixed(2)}</h5>
+                    </div>
+                </div>`;
+        });
+        div.innerHTML = html + `</div>`;
+    }
+
+    function pagarCuota(idPlanCuota, numero, monto) {
+        if(confirm(`¿Confirmar el pago de la cuota #${numero} por un monto de $${monto.toFixed(2)}?`)) {
+            fetch("{{ url_for('sales.pagar_cuota') }}", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id_plan_cuota: idPlanCuota})
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
+                if(data.success && clienteActualId) {
+                    // Recargamos silenciosamente los datos del cliente actual para que la cuota desaparezca
+                    document.querySelector('.fila-seleccionada').click();
+                }
+            });
+        }
+    }
+
+    // Efecto visual para cambiar pestañas activas
+    document.querySelectorAll('#clienteTabs button').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('#clienteTabs button').forEach(b => {
+                b.classList.remove('border-bottom', 'border-3', 'text-danger', 'border-danger', 'text-primary', 'border-primary');
+                b.classList.add('text-secondary', 'border-0');
+            });
+            this.classList.remove('text-secondary', 'border-0');
+            this.classList.add('border-bottom', 'border-3');
+            if(this.id === 'cuotas-tab') this.classList.add('text-danger', 'border-danger');
+            if(this.id === 'compras-tab') this.classList.add('text-primary', 'border-primary');
+        });
+    });
+</script>
+{% endblock %}
