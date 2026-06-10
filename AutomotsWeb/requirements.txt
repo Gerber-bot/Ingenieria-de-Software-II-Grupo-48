@@ -1,0 +1,4 @@
+Flask
+pyodbc
+dependency-injector
+Werkzeug
