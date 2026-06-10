@@ -1,0 +1,553 @@
+{% extends "base.html" %}
+{% block title %}Punto de Venta{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0 mb-3">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 text-secondary fw-bold">1. Datos de Venta</h5>
+            </div>
+
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6 position-relative">
+                        <label class="fw-bold">Cliente</label>
+
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="buscarCliente"
+                                placeholder="Buscar cliente por nombre, apellido o DNI" autocomplete="off">
+
+                            <input type="hidden" id="cliente">
+
+                            <button class="btn btn-outline-success" type="button" title="Nuevo Cliente"
+                                data-url="{{ url_for('clientes.index') }}"
+                                onclick="window.open(this.dataset.url, '_blank')">
+                                <i class="fas fa-plus"></i>
+                            </button>
+
+                            <button class="btn btn-outline-secondary" type="button" title="Recargar Clientes"
+                                onclick="window.location.reload()">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+
+                        <div id="sugerenciasCliente" class="list-group position-absolute w-100 shadow-sm"
+                            style="z-index: 1000;"></div>
+                    </div>
+
+                    <div class="col-md-6 position-relative">
+                        <label class="fw-bold">Vendedor</label>
+
+                        <input type="text" class="form-control" id="buscarVendedor"
+                            placeholder="Buscar vendedor por nombre, apellido, DNI o email" autocomplete="off">
+
+                        <input type="hidden" id="vendedor">
+
+                        <div id="sugerenciasVendedor" class="list-group position-absolute w-100 shadow-sm"
+                            style="z-index: 1000;"></div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Medio de Pago</label>
+                        <select id="id_medio_pago" name="id_medio_pago" class="form-select"
+                            onchange="toggleFinanciacion()">
+                            <option value="">Seleccione un medio de pago</option>
+                            {% for medio in medios_pago %}
+                                <option value="{{ medio.id_medio_pago }}">{{ medio.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="fw-bold">Fecha</label>
+                        <input type="date" class="form-control" id="fecha" value="{{ fecha_actual }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 text-secondary fw-bold">2. Detalle del Carrito</h5>
+            </div>
+
+            <div class="card-body bg-light">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-5 position-relative">
+                        <input type="text" class="form-control" id="buscarVehiculo"
+                            placeholder="Buscar vehículo por marca, modelo, patente o VIN" autocomplete="off">
+
+                        <input type="hidden" id="selVehiculo">
+
+                        <div id="sugerenciasVehiculo" class="list-group position-absolute w-100 shadow-sm"
+                            style="z-index: 1000;"></div>
+                    </div>
+
+                    <div class="col-md-1">
+                        <button class="btn btn-primary w-100" onclick="agregarItem('Vehículo')">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+
+                    <div class="col-md-5 position-relative">
+                        <input type="text" class="form-control" id="buscarServicio"
+                            placeholder="Buscar servicio por nombre o descripción" autocomplete="off">
+
+                        <input type="hidden" id="selServicio">
+
+                        <div id="sugerenciasServicio" class="list-group position-absolute w-100 shadow-sm"
+                            style="z-index: 1000;"></div>
+                    </div>
+
+                    <div class="col-md-1">
+                        <button class="btn btn-primary w-100" onclick="agregarItem('Servicio')">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <table class="table table-bordered bg-white text-center align-middle" id="tablaCarrito">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Descripción</th>
+                            <th>Cant.</th>
+                            <th>Precio U.</th>
+                            <th>Subtotal</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="bodyCarrito"></tbody>
+                </table>
+
+                <h4 class="text-end text-success fw-bold mt-3">
+                    TOTAL: $<span id="totalVenta">0.00</span>
+                </h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 mb-3" id="panelFinanciacion" style="display:none;">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 text-secondary fw-bold">3. Calculadora Financiación</h5>
+            </div>
+
+            <div class="card-body">
+                <label class="fw-bold">Entrega Inicial ($)</label>
+                <input type="number" class="form-control mb-2" id="entregaInicial" value="0"
+                    onkeyup="calcularFinanciacion()">
+
+                <label class="fw-bold">Tasa Interés Anual (%)</label>
+                <input type="number" class="form-control mb-2" id="tasaInteres" value="2.5" step="0.1"
+                    onkeyup="calcularFinanciacion()">
+
+                <label class="fw-bold">Cantidad de Cuotas</label>
+                <div class="input-group mb-3">
+                    <input type="number" class="form-control" id="cuotas" value="12" min="1" max="120"
+                        onchange="calcularFinanciacion()" onkeyup="calcularFinanciacion()">
+                    <span class="input-group-text">Cuotas</span>
+                </div>
+
+                <div class="p-3 bg-light rounded text-center border">
+                    <small class="text-muted d-block">Monto a Financiar</small>
+                    <h5 class="text-danger fw-bold">$<span id="montoFinanciado">0.00</span></h5>
+
+                    <small class="text-muted d-block mt-2">Valor Cuota Fija</small>
+                    <h4 class="text-primary fw-bold">$<span id="valorCuota">0.00</span></h4>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-danger btn-lg w-25 fw-bold shadow-sm" onclick="limpiarVenta()"
+                title="Cancelar Venta">
+                <i class="fas fa-times"></i>
+            </button>
+
+            <button class="btn btn-success btn-lg w-75 fw-bold shadow-sm" onclick="confirmarVenta()">
+                <i class="fas fa-check-circle me-2"></i>Procesar Venta
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let carrito = [];
+    let planCuotas = [];
+    let totalGeneral = 0;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        configurarAutocomplete(
+            'buscarCliente',
+            'cliente',
+            'sugerenciasCliente',
+            'clientes',
+            formatearCliente
+        );
+
+        configurarAutocomplete(
+            'buscarVendedor',
+            'vendedor',
+            'sugerenciasVendedor',
+            'vendedores',
+            formatearVendedor
+        );
+
+        configurarAutocomplete(
+            'buscarVehiculo',
+            'selVehiculo',
+            'sugerenciasVehiculo',
+            'vehiculos',
+            formatearVehiculo
+        );
+
+        configurarAutocomplete(
+            'buscarServicio',
+            'selServicio',
+            'sugerenciasServicio',
+            'servicios',
+            formatearServicio
+        );
+    });
+
+    function configurarAutocomplete(inputId, hiddenId, sugerenciasId, tipo, formateador) {
+        const input = document.getElementById(inputId);
+        const hidden = document.getElementById(hiddenId);
+        const contenedor = document.getElementById(sugerenciasId);
+
+        if (!input || !hidden || !contenedor) return;
+
+        let timeout = null;
+
+        input.addEventListener('keyup', function () {
+            clearTimeout(timeout);
+
+            const criterio = input.value.trim();
+
+            hidden.value = '';
+            hidden.dataset.texto = '';
+            hidden.dataset.precio = '';
+
+            if (criterio.length < 2) {
+                contenedor.innerHTML = '';
+                return;
+            }
+
+            timeout = setTimeout(() => {
+                fetch(`/operaciones/ventas/buscar-datos?tipo=${tipo}&criterio=${encodeURIComponent(criterio)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        contenedor.innerHTML = '';
+
+                        if (!data.success) {
+                            console.error(data.message || 'Error al buscar datos');
+                            return;
+                        }
+
+                        if (data.datos.length === 0) {
+                            contenedor.innerHTML = `
+                                <div class="list-group-item text-muted">
+                                    No se encontraron resultados
+                                </div>`;
+                            return;
+                        }
+
+                        data.datos.forEach(item => {
+                            const opcion = formateador(item);
+
+                            const boton = document.createElement('button');
+                            boton.type = 'button';
+                            boton.className = 'list-group-item list-group-item-action';
+                            boton.textContent = opcion.text;
+
+                            boton.addEventListener('click', function () {
+                                input.value = opcion.text;
+                                hidden.value = opcion.value;
+                                hidden.dataset.texto = opcion.text;
+
+                                if (opcion.precio !== undefined) {
+                                    hidden.dataset.precio = opcion.precio;
+                                }
+
+                                contenedor.innerHTML = '';
+                            });
+
+                            contenedor.appendChild(boton);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error al buscar datos:', error);
+                        contenedor.innerHTML = '';
+                    });
+            }, 300);
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!input.contains(e.target) && !contenedor.contains(e.target)) {
+                contenedor.innerHTML = '';
+            }
+        });
+    }
+
+    function formatearCliente(c) {
+        return {
+            value: c.id_cliente,
+            text: `${c.apellido}, ${c.nombre} (${c.dni})`
+        };
+    }
+
+    function formatearVendedor(v) {
+        return {
+            value: v.id_usuario,
+            text: `${v.apellido}, ${v.nombre}`
+        };
+    }
+
+    function formatearVehiculo(v) {
+        return {
+            value: v.id_vehiculo,
+            text: `${v.marca} ${v.modelo} ${v.patente ? '- ' + v.patente : ''}`,
+            precio: v.precio
+        };
+    }
+
+    function formatearServicio(s) {
+        return {
+            value: s.id_servicio,
+            text: s.nombre,
+            precio: s.precio
+        };
+    }
+
+    function agregarItem(tipo) {
+        const hidden = tipo === 'Vehículo'
+            ? document.getElementById('selVehiculo')
+            : document.getElementById('selServicio');
+
+        const input = tipo === 'Vehículo'
+            ? document.getElementById('buscarVehiculo')
+            : document.getElementById('buscarServicio');
+
+        if (!hidden.value) {
+            alert(`Seleccione un ${tipo.toLowerCase()} de la lista`);
+            return;
+        }
+
+        const id = hidden.value;
+        const desc = hidden.dataset.texto;
+        const precio = parseFloat(hidden.dataset.precio);
+
+        if (isNaN(precio)) {
+            alert('El ítem seleccionado no tiene precio válido');
+            return;
+        }
+
+        if (carrito.find(i => i.id === parseInt(id) && i.tipo === tipo)) {
+            alert('El ítem ya está en el carrito');
+            return;
+        }
+
+        carrito.push({
+            tipo: tipo,
+            id: parseInt(id),
+            desc: desc,
+            precio: precio,
+            cantidad: 1,
+            subtotal: precio
+        });
+
+        hidden.value = '';
+        hidden.dataset.texto = '';
+        hidden.dataset.precio = '';
+        input.value = '';
+
+        renderCarrito();
+    }
+
+    function eliminarItem(index) {
+        carrito.splice(index, 1);
+        renderCarrito();
+    }
+
+    function renderCarrito() {
+        const tbody = document.getElementById('bodyCarrito');
+        tbody.innerHTML = '';
+        totalGeneral = 0;
+
+        carrito.forEach((item, index) => {
+            totalGeneral += item.subtotal;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>
+                        <span class="badge ${item.tipo === 'Vehículo' ? 'bg-primary' : 'bg-info'}">
+                            ${item.tipo}
+                        </span>
+                    </td>
+                    <td>${item.desc}</td>
+                    <td>${item.cantidad}</td>
+                    <td>$${item.precio.toFixed(2)}</td>
+                    <td class="fw-bold">$${item.subtotal.toFixed(2)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="eliminarItem(${index})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        });
+
+        document.getElementById('totalVenta').innerText = totalGeneral.toFixed(2);
+        calcularFinanciacion();
+    }
+
+    function toggleFinanciacion() {
+        const select = document.getElementById('id_medio_pago');
+
+        if (!select.value) {
+            document.getElementById('panelFinanciacion').style.display = 'none';
+            calcularFinanciacion();
+            return;
+        }
+
+        const nombreMedio = select.options[select.selectedIndex].text.toLowerCase();
+        const esFinanciado = nombreMedio.includes('financiad');
+
+        document.getElementById('panelFinanciacion').style.display = esFinanciado ? 'block' : 'none';
+        calcularFinanciacion();
+    }
+
+    function calcularFinanciacion() {
+        if (totalGeneral === 0) {
+            document.getElementById('montoFinanciado').innerText = "0.00";
+            document.getElementById('valorCuota').innerText = "0.00";
+            planCuotas = [];
+            return;
+        }
+
+        const panelVisible = document.getElementById('panelFinanciacion').style.display !== 'none';
+
+        const entrega = parseFloat(document.getElementById('entregaInicial').value) || 0;
+        const tasaAnual = parseFloat(document.getElementById('tasaInteres').value) || 0;
+        const cuotas = parseInt(document.getElementById('cuotas').value) || 12;
+
+        let monto = totalGeneral - entrega;
+
+        if (monto < 0) monto = 0;
+
+        document.getElementById('montoFinanciado').innerText = monto.toFixed(2);
+        planCuotas = [];
+
+        if (!panelVisible || monto === 0) {
+            document.getElementById('valorCuota').innerText = "0.00";
+            return;
+        }
+
+        let tasaMensual = tasaAnual / 100 / 12;
+        let valorCuota = 0;
+        let saldo = monto;
+        let fecha = new Date(document.getElementById('fecha').value);
+
+        if (tasaMensual === 0) {
+            valorCuota = monto / cuotas;
+
+            for (let i = 1; i <= cuotas; i++) {
+                fecha.setMonth(fecha.getMonth() + 1);
+                saldo -= valorCuota;
+
+                planCuotas.push({
+                    numero: i,
+                    vencimiento: fecha.toISOString().split('T')[0],
+                    capital: valorCuota,
+                    interes: 0,
+                    total: valorCuota,
+                    saldo: Math.max(0, saldo)
+                });
+            }
+        } else {
+            let factor = Math.pow(1 + tasaMensual, cuotas);
+            valorCuota = monto * (tasaMensual * factor) / (factor - 1);
+
+            for (let i = 1; i <= cuotas; i++) {
+                fecha.setMonth(fecha.getMonth() + 1);
+
+                let interes = saldo * tasaMensual;
+                let capital = valorCuota - interes;
+
+                if (i === cuotas) {
+                    capital = saldo;
+                    valorCuota = capital + interes;
+                }
+
+                saldo -= capital;
+
+                planCuotas.push({
+                    numero: i,
+                    vencimiento: fecha.toISOString().split('T')[0],
+                    capital: capital,
+                    interes: interes,
+                    total: valorCuota,
+                    saldo: Math.max(0, saldo)
+                });
+            }
+        }
+
+        document.getElementById('valorCuota').innerText = valorCuota.toFixed(2);
+    }
+
+    function limpiarVenta() {
+        if (confirm("¿Está seguro de cancelar la operación? Se vaciará el carrito y se perderán los datos cargados.")) {
+            window.location.reload();
+        }
+    }
+
+    function confirmarVenta() {
+        if (carrito.length === 0) return alert('El carrito está vacío');
+        if (!document.getElementById('cliente').value) return alert('Seleccione un cliente');
+        if (!document.getElementById('vendedor').value) return alert('Seleccione un vendedor');
+
+        const selectMedio = document.getElementById('id_medio_pago');
+
+        if (!selectMedio.value) return alert('Seleccione un medio de pago');
+
+        const nombreMedioPago = selectMedio.options[selectMedio.selectedIndex].text;
+        const esFinanciado = nombreMedioPago.toLowerCase().includes('financiad');
+
+        const payload = {
+            id_cliente: parseInt(document.getElementById('cliente').value),
+            id_vendedor: parseInt(document.getElementById('vendedor').value),
+            id_medio_pago: parseInt(selectMedio.value),
+            medio_pago: esFinanciado ? 'Financiado' : 'Contado',
+            fecha: document.getElementById('fecha').value,
+            total_venta: totalGeneral,
+            entrega_inicial: esFinanciado ? parseFloat(document.getElementById('entregaInicial').value) || 0 : 0,
+            monto_financiado: esFinanciado ? parseFloat(document.getElementById('montoFinanciado').innerText) || 0 : 0,
+            cuotas: esFinanciado ? parseInt(document.getElementById('cuotas').value) || 0 : 0,
+            valor_cuota: esFinanciado ? parseFloat(document.getElementById('valorCuota').innerText) || 0 : 0,
+            tasa_interes: esFinanciado ? parseFloat(document.getElementById('tasaInteres').value) || 0 : 0,
+            detalles: carrito,
+            plan_cuotas: esFinanciado ? planCuotas : []
+        };
+
+        fetch("{{ url_for('ventas.nueva_venta') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    window.location.href = "{{ url_for('ventas.historial_ventas') }}";
+                } else {
+                    alert("Error: " + data.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Error al comunicarse con el servidor.");
+            });
+    }
+</script>
+{% endblock %}

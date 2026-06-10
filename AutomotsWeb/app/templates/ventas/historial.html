@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+
+{% block title %}Historial de Ventas{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+        <h4 class="mb-0 text-secondary fw-bold">
+            <i class="fas fa-list-alt me-2"></i>Historial de Operaciones
+        </h4>
+
+        <div>
+            <a href="{{ url_for('ventas.nueva_venta') }}" class="btn btn-primary fw-bold">
+                <i class="fas fa-plus me-1"></i> Nueva Venta
+            </a>
+        </div>
+    </div>
+
+    <div class="card-body">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label class="fw-bold">Buscar venta</label>
+                <input type="text" class="form-control" id="buscarHistorial"
+                    placeholder="Buscar por ID, cliente, vendedor, fecha o estado"
+                    autocomplete="off"
+                    spellcheck="false">
+                <small class="text-muted">Se muestran hasta 10 resultados.</small>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th width="10%">ID Venta</th>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Vendedor</th>
+                        <th class="text-center">Estado</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody id="bodyHistorial">
+                    {% for v in ventas %}
+                    <tr>
+                        <td class="text-muted fw-bold">#{{ v.id_venta }}</td>
+                        <td>{{ v.fecha.strftime('%d/%m/%Y') if v.fecha.strftime else v.fecha }}</td>
+                        <td class="fw-bold text-primary">{{ v.cliente }}</td>
+                        <td>{{ v.vendedor }}</td>
+
+                        <td class="text-center">
+                            {% if v.estado == 'Cancelada' %}
+                                <span class="badge bg-danger">Cancelada</span>
+                            {% else %}
+                                <span class="badge bg-success">Activa</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-end fw-bold text-success">
+                            ${{ "{:,.2f}".format(v.total).replace(',', '.') }}
+                        </td>
+
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-info" title="Ver Detalles"
+                                data-id="{{ v.id_venta }}" onclick="verDetalles(this.dataset.id)">
+                                <i class="fas fa-eye"></i>
+                            </button>
+
+                            <button class="btn btn-sm btn-outline-secondary" title="Imprimir Comprobante"
+                                data-id="{{ v.id_venta }}" onclick="imprimirComprobante(this.dataset.id)">
+                                <i class="fas fa-print"></i>
+                            </button>
+
+                            {% if v.estado == 'Cancelada' %}
+                                <button class="btn btn-sm btn-outline-danger" title="Venta Cancelada" disabled>
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            {% else %}
+                                <button class="btn btn-sm btn-outline-danger" title="Cancelar Venta"
+                                    data-id="{{ v.id_venta }}" onclick="cancelarVenta(this.dataset.id)">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">
+                            <i class="fas fa-receipt fa-2x mb-2"></i><br>
+                            No hay ventas registradas en el sistema.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalVerVenta" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-receipt me-2"></i>
+                    Detalle de Venta #<span id="mdl_id_venta"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body bg-light">
+                <div class="text-center py-4" id="spinVenta">
+                    <div class="spinner-border text-info"></div>
+                    <p class="mt-2 text-muted fw-bold">Buscando ticket...</p>
+                </div>
+
+                <div id="datosVenta" style="display:none;"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        configurarBusquedaHistorial();
+    });
+
+    function configurarBusquedaHistorial() {
+        const input = document.getElementById('buscarHistorial');
+        let timeout = null;
+
+        input.addEventListener('keyup', function () {
+            clearTimeout(timeout);
+
+            timeout = setTimeout(() => {
+                buscarVentasHistorial(input.value);
+            }, 300);
+        });
+    }
+
+    function buscarVentasHistorial(criterio) {
+        fetch(`/operaciones/ventas/buscar?criterio=${encodeURIComponent(criterio)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert(data.message || 'Error al buscar ventas');
+                    return;
+                }
+
+                renderHistorial(data.ventas);
+            })
+            .catch(error => {
+                console.error('Error al buscar ventas:', error);
+                alert('Error al comunicarse con el servidor.');
+            });
+    }
+
+    function renderHistorial(ventas) {
+        const tbody = document.getElementById('bodyHistorial');
+        tbody.innerHTML = '';
+
+        if (!ventas || ventas.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-muted">
+                        <i class="fas fa-receipt fa-2x mb-2"></i><br>
+                        No se encontraron ventas.
+                    </td>
+                </tr>`;
+            return;
+        }
+
+        ventas.forEach(v => {
+            const fecha = formatearFecha(v.fecha);
+            const total = formatearMoneda(v.total);
+            const estado = v.estado || 'Activa';
+
+            const badgeEstado = estado === 'Cancelada'
+                ? '<span class="badge bg-danger">Cancelada</span>'
+                : '<span class="badge bg-success">Activa</span>';
+
+            const botonCancelar = estado === 'Cancelada'
+                ? `<button class="btn btn-sm btn-outline-danger" title="Venta Cancelada" disabled>
+                        <i class="fas fa-ban"></i>
+                   </button>`
+                : `<button class="btn btn-sm btn-outline-danger" title="Cancelar Venta"
+                        data-id="${v.id_venta}" onclick="cancelarVenta(this.dataset.id)">
+                        <i class="fas fa-ban"></i>
+                   </button>`;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td class="text-muted fw-bold">#${v.id_venta}</td>
+                    <td>${fecha}</td>
+                    <td class="fw-bold text-primary">${v.cliente}</td>
+                    <td>${v.vendedor}</td>
+                    <td class="text-center">${badgeEstado}</td>
+                    <td class="text-end fw-bold text-success">$${total}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-info" title="Ver Detalles"
+                            data-id="${v.id_venta}" onclick="verDetalles(this.dataset.id)">
+                            <i class="fas fa-eye"></i>
+                        </button>
+
+                        <button class="btn btn-sm btn-outline-secondary" title="Imprimir Comprobante"
+                            data-id="${v.id_venta}" onclick="imprimirComprobante(this.dataset.id)">
+                            <i class="fas fa-print"></i>
+                        </button>
+
+                        ${botonCancelar}
+                    </td>
+                </tr>`;
+        });
+    }
+
+    function cancelarVenta(id) {
+        if (!confirm(`¿Está seguro de cancelar la venta #${id}? Los vehículos asociados volverán a estar disponibles.`)) {
+            return;
+        }
+
+        fetch(`/operaciones/ventas/cancelar/${id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+
+                if (data.success) {
+                    buscarVentasHistorial(document.getElementById('buscarHistorial').value);
+                }
+            })
+            .catch(error => {
+                console.error('Error al cancelar venta:', error);
+                alert('Error al comunicarse con el servidor.');
+            });
+    }
+
+    function formatearFecha(fecha) {
+        if (!fecha) return '';
+
+        const date = new Date(fecha);
+
+        if (isNaN(date.getTime())) {
+            return fecha;
+        }
+
+        return date.toLocaleDateString('es-AR');
+    }
+
+    function formatearMoneda(valor) {
+        const numero = parseFloat(valor) || 0;
+
+        return numero.toLocaleString('es-AR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function verDetalles(id) {
+        document.getElementById('spinVenta').style.display = 'block';
+        document.getElementById('datosVenta').style.display = 'none';
+
+        new bootstrap.Modal(document.getElementById('modalVerVenta')).show();
+
+        fetch(`{{ url_for('ventas.detalle_venta', id=0) }}`.replace('0', id))
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('mdl_id_venta').innerText = id;
+
+                    let html = `
+                        <div class="row mb-3 bg-white p-3 rounded shadow-sm border">
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong>Cliente:</strong> ${data.cabecera.cliente}</p>
+                                <p class="mb-1"><strong>Vendedor:</strong> ${data.cabecera.vendedor}</p>
+                            </div>
+
+                            <div class="col-md-6 text-end">
+                                <p class="mb-1"><strong>Fecha:</strong> ${formatearFecha(data.cabecera.fecha)}</p>
+                                <p class="mb-1">
+                                    <strong>Forma de Pago:</strong>
+                                    <span class="badge bg-secondary">${data.cabecera.medio_pago || 'N/A'}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <table class="table table-bordered bg-white text-center align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Descripción</th>
+                                    <th>Cant.</th>
+                                    <th>Precio U.</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+
+                    data.items.forEach(i => {
+                        html += `
+                            <tr>
+                                <td>
+                                    <span class="badge ${i.tipo === 'Vehículo' ? 'bg-primary' : 'bg-info'}">
+                                        ${i.tipo}
+                                    </span>
+                                </td>
+                                <td>${i.descripcion}</td>
+                                <td>${i.cantidad}</td>
+                                <td>$${formatearMoneda(i.precio)}</td>
+                                <td class="fw-bold">$${formatearMoneda(i.subtotal)}</td>
+                            </tr>`;
+                    });
+
+                    html += `
+                            </tbody>
+                        </table>
+
+                        <h4 class="text-end text-success fw-bold mt-3">
+                            TOTAL: $${formatearMoneda(data.cabecera.total)}
+                        </h4>
+                    `;
+
+                    if (data.cabecera.monto_financiado > 0) {
+                        html += `
+                            <div class="alert alert-warning mt-3">
+                                <i class="fas fa-coins me-2"></i>
+                                <strong>Financiación:</strong>
+                                Entrega Inicial: $${formatearMoneda(data.cabecera.entrega_inicial)}
+                                | Financiado: $${formatearMoneda(data.cabecera.monto_financiado)}
+                            </div>`;
+                    }
+
+                    document.getElementById('datosVenta').innerHTML = html;
+                    document.getElementById('spinVenta').style.display = 'none';
+                    document.getElementById('datosVenta').style.display = 'block';
+                } else {
+                    alert("Error: " + data.message);
+                    bootstrap.Modal.getInstance(document.getElementById('modalVerVenta')).hide();
+                }
+            })
+            .catch(err => alert("Error al conectar con el servidor."));
+    }
+
+    function imprimirComprobante(id) {
+        fetch(`{{ url_for('ventas.detalle_venta', id=0) }}`.replace('0', id))
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    let vent = window.open('', '_blank');
+
+                    let itemsHtml = data.items.map(i => `
+                        <tr>
+                            <td>${i.tipo}</td>
+                            <td>${i.descripcion}</td>
+                            <td>$${formatearMoneda(i.precio)}</td>
+                            <td>$${formatearMoneda(i.subtotal)}</td>
+                        </tr>
+                    `).join('');
+
+                    vent.document.write(`
+                        <html>
+                        <head>
+                            <title>Comprobante de Venta #${id}</title>
+                            <style>
+                                body {
+                                    font-family: Arial, sans-serif;
+                                    padding: 40px;
+                                    color: #333;
+                                }
+
+                                .header {
+                                    text-align: center;
+                                    border-bottom: 2px solid #333;
+                                    padding-bottom: 20px;
+                                    margin-bottom: 20px;
+                                }
+
+                                table {
+                                    width: 100%;
+                                    border-collapse: collapse;
+                                    margin-top: 20px;
+                                }
+
+                                th, td {
+                                    border: 1px solid #ddd;
+                                    padding: 12px;
+                                    text-align: left;
+                                }
+
+                                th {
+                                    background-color: #f8f9fa;
+                                }
+
+                                .total {
+                                    font-size: 24px;
+                                    font-weight: bold;
+                                    margin-top: 20px;
+                                    text-align: right;
+                                }
+                            </style>
+                        </head>
+
+                        <body>
+                            <div class="header">
+                                <h1>Automotors S.A.</h1>
+                                <h3>Comprobante de Operación #${id}</h3>
+                            </div>
+
+                            <p>
+                                <strong>Fecha:</strong> ${formatearFecha(data.cabecera.fecha)}<br>
+                                <strong>Cliente:</strong> ${data.cabecera.cliente}<br>
+                                <strong>Vendedor:</strong> ${data.cabecera.vendedor}<br>
+                                <strong>Condición de Pago:</strong> ${data.cabecera.medio_pago || 'N/A'}
+                            </p>
+
+                            <table>
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th>Descripción</th>
+                                    <th>Precio U.</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                                ${itemsHtml}
+                            </table>
+
+                            <div class="total">
+                                TOTAL: $${formatearMoneda(data.cabecera.total)}
+                            </div>
+
+                            <script>
+                                window.onload = function() { window.print(); }
+                                window.onafterprint = function() { window.close(); }
+                            <\/script>
+                        </body>
+                        </html>
+                    `);
+
+                    vent.document.close();
+                } else {
+                    alert("Error al generar el comprobante: " + data.message);
+                }
+            });
+    }
+</script>
+{% endblock %}
